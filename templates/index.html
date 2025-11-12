@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parkinson's Voice Analysis</title>
+    
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Load Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 3. Custom Styles & Theme -->
+    <style>
+        /* --- Base Theme --- */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Deep dark blue/purple gradient background */
+            background-color: #0F0C29;
+            background-image: linear-gradient(135deg, #0a081c 0%, #1d143b 50%, #0a081c 100%);
+            color: #E0E0E0;
+        }
+
+        /* --- Custom Card Styling --- */
+        .card {
+            background-color: #1E1B3A;
+            border-radius: 12px;
+            border: 1px solid #3a325e;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(118, 75, 255, 0.1);
+        }
+
+        /* --- Analysis Result Card Specifics --- */
+        .result-card {
+            background-color: #16132f;
+            border: 1px solid #3a325e;
+            padding: 1.5rem;
+            text-align: center;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .result-card .result-value {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1;
+            margin: 0.5rem 0;
+            transition: all 0.3s ease;
+        }
+        .result-card .result-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #a09cc2;
+        }
+        .result-card .result-prediction {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-top: 0.25rem;
+        }
+
+        /* High-Risk (Red/Orange) */
+        .prediction-high {
+            border-top: 4px solid #F97316; /* Orange-500 */
+        }
+        .prediction-high .result-value {
+            color: #F97316;
+            text-shadow: 0 0 15px rgba(249, 115, 22, 0.5);
+        }
+        .prediction-high .result-prediction {
+            color: #F97316;
+        }
+
+        /* Low-Risk (Blue/Cyan) */
+        .prediction-low {
+            border-top: 4px solid #0EA5E9; /* Sky-500 */
+        }
+        .prediction-low .result-value {
+            color: #0EA5E9;
+            text-shadow: 0 0 15px rgba(14, 165, 233, 0.5);
+        }
+        .prediction-low .result-prediction {
+            color: #0EA5E9;
+        }
+        
+        /* Error (Red) */
+        .prediction-error {
+             border-top: 4px solid #EF4444; /* Red-500 */
+        }
+        .prediction-error .result-value {
+            color: #EF4444;
+            text-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+            font-size: 2rem; /* Smaller for "ERROR" text */
+        }
+        .prediction-error .result-prediction {
+            color: #EF4444;
+        }
+
+        /* --- How it Works Section --- */
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #FFFFFF;
+            font-size: 1.25rem;
+            margin: 0 auto 1rem auto;
+        }
+        .step-1 { background-color: #7C3AED; } /* Violet */
+        .step-2 { background-color: #EC4899; } /* Pink */
+        .step-3 { background-color: #0EA5E9; } /* Sky */
+        .step-4 { background-color: #10B981; } /* Emerald */
+
+        .step-arrow {
+            color: #4B5563; /* Gray-600 */
+            font-size: 2rem;
+        }
+        @media (max-width: 768px) {
+            .step-arrow {
+                transform: rotate(90deg);
+                margin: 1rem 0;
+            }
+        }
+        
+        /* --- Custom Button Styles --- */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background-color: #4F46E5; /* Indigo-600 */
+            color: #FFFFFF;
+        }
+        .btn-primary:hover {
+            background-color: #4338CA; /* Indigo-700 */
+        }
+        .btn-primary:disabled {
+            background-color: #4B5563; /* Gray-600 */
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #10B981; /* Emerald-500 */
+            color: #FFFFFF;
+        }
+        .btn-secondary:hover {
+            background-color: #059669; /* Emerald-600 */
+        }
+        .btn-secondary:disabled {
+            background-color: #4B5563; /* Gray-600 */
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        /* Custom File Input */
+        .custom-file-input {
+            width: 0.1px;
+            height: 0.1px;
+            opacity: 0;
+            overflow: hidden;
+            position: absolute;
+            z-index: -1;
+        }
+        .custom-file-label {
+            background-color: #374151; /* Gray-700 */
+            color: #E0E0E0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .custom-file-label:hover {
+            background-color: #4B5563; /* Gray-600 */
+        }
+
+        /* Native Audio Player Styling */
+        audio::-webkit-media-controls-panel {
+            background-color: #1E1B3A;
+            border-radius: 8px;
+        }
+        audio::-webkit-media-controls-play-button {
+            background-color: #4F46E5;
+            border-radius: 50%;
+        }
+        audio::-webkit-media-controls-timeline {
+            background-color: #3a325e;
+            border-radius: 6px;
+        }
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display {
+            color: #E0E0E0;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+
+        <!-- === 1. HEADER & ABOUT SECTION === -->
+        <section id="about" class="mb-12">
+            <h1 class="text-3xl md:text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-sky-400">
+                Parkinson's Voice Analysis
+            </h1>
+            <p class="text-center text-lg text-gray-400 mt-2">
+                An AI-powered screening tool for early detection indicators.
+            </p>
+            
+            <div class="text-center mt-6">
+                <a href="#about-details" class="btn btn-primary">
+                    About Parkinson's Disease
+                </a>
+            </div>
+
+            <div id="about-details" class="card mt-8 p-6 md:p-8 flex flex-col md:flex-row gap-6 items-center">
+                <div class="md:w-1/2">
+                    <!-- Placeholder image - replace with your own in the static folder -->
+                    <img src="https://placehold.co/600x400/1E1B3A/E0E0E0?text=Understanding+PD" 
+                         alt="Doctor with patient" 
+                         class="rounded-lg shadow-lg w-full">
+                </div>
+                <div class="md:w-1/2">
+                    <h2 class="text-2xl font-bold text-violet-300 mb-3">What is Parkinson's Disease?</h2>
+                    <p class="text-gray-300 mb-4">
+                        Parkinson's disease is a progressive disorder of the nervous system that affects movement. It develops gradually, often starting with a barely noticeable tremor.
+                    </p>
+                    <div class="bg-gray-900/50 border border-violet-800 p-4 rounded-lg">
+                        <h3 class="font-semibold text-violet-300 flex items-center">
+                            <i class="fas fa-exclamation-circle mr-2"></i>Why Voice Analysis Matters
+                        </h3>
+                        <ul class="list-disc list-inside text-gray-400 text-sm mt-2 space-y-1">
+                            <li>Voice changes can occur 2-3 years before visible motor symptoms.</li>
+                            <li>Enables earlier intervention and treatment.</li>
+                            <li>Provides accessible, non-invasive screening.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- === 2. HOW IT WORKS SECTION === -->
+        <section id="how-it-works" class="mb-12">
+            <h2 class="text-3xl font-bold text-center mb-2">Simple Process, Powerful Results</h2>
+            <p class="text-center text-gray-400 mb-8">Our AI-powered voice analysis makes early detection accessible and convenient.</p>
+            
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <!-- Step 1 -->
+                <div class="card p-6 text-center flex-1 w-full">
+                    <div class="step-number step-1">1</div>
+                    <i class="fas fa-microphone-alt text-4xl text-violet-400 mb-3"></i>
+                    <h3 class="text-xl font-semibold mb-2">Voice Recording</h3>
+                    <p class="text-gray-400 text-sm">Record simple voice samples following our guided prompts. The process takes just 2-3 minutes.</p>
+                </div>
+                
+                <i class="fas fa-arrow-right step-arrow"></i>
+                
+                <!-- Step 2 -->
+                <div class="card p-6 text-center flex-1 w-full">
+                    <div class="step-number step-2">2</div>
+                    <i class="fas fa-brain text-4xl text-pink-400 mb-3"></i>
+                    <h3 class="text-xl font-semibold mb-2">AI Analysis</h3>
+                    <p class="text-gray-400 text-sm">Our advanced AI analyzes vocal biomarkers including pitch, stability, and speech patterns.</p>
+                </div>
+                
+                <i class="fas fa-arrow-right step-arrow"></i>
+                
+                <!-- Step 3 -->
+                <div class="card p-6 text-center flex-1 w-full">
+                    <div class="step-number step-3">3</div>
+                    <i class="fas fa-chart-line text-4xl text-sky-400 mb-3"></i>
+                    <h3 class="text-xl font-semibold mb-2">Pattern Detection</h3>
+                    <p class="text-gray-400 text-sm">Machine learning models compare your voice against thousands of medical voice samples.</p>
+                </div>
+                
+                <i class="fas fa-arrow-right step-arrow"></i>
+                
+                <!-- Step 4 -->
+                <div class="card p-6 text-center flex-1 w-full">
+                    <div class="step-number step-4">4</div>
+                    <i class="fas fa-file-invoice text-4xl text-emerald-400 mb-3"></i>
+                    <h3 class="text-xl font-semibold mb-2">Results & Insights</h3>
+                    <p class="text-gray-400 text-sm">Receive a detailed report with risk assessment, confidence levels, and recommendations.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- === 3. COMMON SYMPTOMS SECTION === -->
+        <section id="symptoms" class="mb-12">
+            <div class="card p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-center mb-6">Common Symptoms</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-hand-paper text-2xl text-pink-400 mb-2"></i>
+                        <p>Tremors or shaking</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-walking text-2xl text-pink-400 mb-2"></i>
+                        <p>Slowed movement</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-male text-2xl text-pink-400 mb-2"></i>
+                        <p>Rigid muscles</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-balance-scale text-2xl text-pink-400 mb-2"></i>
+                        <p>Balance problems</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-chair text-2xl text-pink-400 mb-2"></i>
+                        <p>Impaired posture</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-volume-up text-2xl text-pink-400 mb-2"></i>
+                        <p>Speech changes</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-pen text-2xl text-pink-400 mb-2"></i>
+                        <p>Writing changes</p>
+                    </div>
+                    <div class="bg-gray-900/50 p-4 rounded-lg">
+                        <i class="fas fa-smile text-2xl text-pink-400 mb-2"></i>
+                        <p>Loss of automatic movements</p>
+                    </div>
+                </div>
+                <div class="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg mt-6 text-center flex items-center justify-center gap-2">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><strong>Remember:</strong> This tool is for screening purposes only. Always consult with a healthcare professional for proper diagnosis and treatment.</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- === 4. ANALYSIS TOOL SECTION === -->
+        <section id="analysis-tool" class="card p-6 md:p-8 mb-12">
+            <h2 class="text-3xl font-bold text-center mb-6">Run Your Analysis</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- RECORD AUDIO -->
+                <div class="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Record Your Voice</h3>
+                    <div class="flex justify-center gap-4">
+                        <button id="recordButton" class="btn btn-primary w-1/2">
+                            <i class="fas fa-microphone"></i> Start Recording
+                        </button>
+                        <button id="stopButton" class="btn btn-primary w-1/2" disabled>
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                    </div>
+                    <audio id="audioPlayback" controls class="w-full mt-4 hidden"></audio>
+                    <button id="analyzeRecordedButton" class="btn btn-secondary w-full mt-4 hidden">
+                        <i class="fas fa-flask"></i> Analyze Recorded Audio
+                    </button>
+                </div>
+                
+                <!-- UPLOAD AUDIO -->
+                <div class="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4 text-center">--- OR ---</h3>
+                    
+                    <div class="flex flex-col items-center gap-4">
+                        <input type="file" id="audioFileInput" class="custom-file-input" accept="audio/*">
+                        <label for="audioFileInput" class="custom-file-label w-full">
+                            <i class="fas fa-upload"></i> <span id="file-chosen-text">Choose file</span>
+                        </label>
+                        <button id="analyzeUploadedButton" class="btn btn-primary w-full" disabled>
+                            <i class="fas fa-flask"></i> Analyze Uploaded Audio
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- STATUS / ERROR MESSAGE AREA -->
+            <div id="statusMessage" class="text-center mt-6 text-lg"></div>
+        </section>
+
+        <!-- === 5. ANALYSIS RESULTS SECTION === -->
+        <section id="analysis-results" class="hidden">
+            <h2 class="text-3xl font-bold text-center mb-6">Analysis Results</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Card 1: Random Forest -->
+                <div id="rf-card" class="result-card">
+                    <h3 class="result-label">RANDOM FOREST ANALYSIS</h3>
+                    <div id="rf-value" class="result-value">--%</div>
+                    <p id="rf-prediction" class="result-prediction">Prediction: N/A</p>
+                    <p class="text-gray-400 text-sm">Parkinson's Probability</p>
+                </div>
+                
+                <!-- Card 2: CNN Model -->
+                <div id="cnn-card" class="result-card">
+                    <h3 class="result-label">CNN MODEL ANALYSIS</h3>
+                    <div id="cnn-value" class="result-value">--%</div>
+                    <p id="cnn-prediction" class="result-prediction">Prediction: N/A</p>
+                    <p class="text-gray-400 text-sm">Parkinson's Probability</p>
+                </div>
+                
+                <!-- Card 3: CNN (Extra) / Error -->
+                <div id="extra-card" class="result-card">
+                    <h3 class="result-label">CNN (EXTRA) ANALYSIS</h3>
+                    <div id="extra-value" class="result-value">--%</div>
+                    <p id="extra-prediction" class="result-prediction">Prediction: N/A</p>
+                    <p class="text-gray-400 text-sm">Parkinson's Probability</p>
+                </div>
+            </div>
+        </section>
+
+    </div> <!-- End max-w-6xl container -->
+
+    <!-- 4. JAVASCRIPT LOGIC -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- DOM Element Selection ---
+            const recordButton = document.getElementById('recordButton');
+            const stopButton = document.getElementById('stopButton');
+            const audioPlayback = document.getElementById('audioPlayback');
+            const analyzeRecordedButton = document.getElementById('analyzeRecordedButton');
+            
+            const audioFileInput = document.getElementById('audioFileInput');
+            const fileChosenText = document.getElementById('file-chosen-text');
+            const analyzeUploadedButton = document.getElementById('analyzeUploadedButton');
+            
+            const statusMessage = document.getElementById('statusMessage');
+            const resultsSection = document.getElementById('analysis-results');
+            
+            // Result Cards
+            const rfCard = document.getElementById('rf-card');
+            const rfValue = document.getElementById('rf-value');
+            const rfPrediction = document.getElementById('rf-prediction');
+            
+            const cnnCard = document.getElementById('cnn-card');
+            const cnnValue = document.getElementById('cnn-value');
+            const cnnPrediction = document.getElementById('cnn-prediction');
+            
+            const extraCard = document.getElementById('extra-card');
+            const extraValue = document.getElementById('extra-value');
+            const extraPrediction = document.getElementById('extra-prediction');
+
+            // --- State Variables ---
+            let mediaRecorder;
+            let audioChunks = [];
+            let audioBlob = null; // Will hold the audio data (from record or upload)
+
+            // --- Helper Functions ---
+            
+            function showStatus(message, isError = false) {
+                statusMessage.textContent = message;
+                statusMessage.className = isError 
+                    ? 'text-center mt-6 text-lg text-red-400' 
+                    : 'text-center mt-6 text-lg text-sky-300';
+            }
+            
+            function resetResultCards() {
+                resultsSection.classList.add('hidden');
+                
+                [rfCard, cnnCard, extraCard].forEach(card => {
+                    card.className = 'result-card'; // Reset border
+                });
+                
+                rfValue.textContent = '--%';
+                rfPrediction.textContent = 'Prediction: N/A';
+                
+                cnnValue.textContent = '--%';
+                cnnPrediction.textContent = 'Prediction: N/A';
+                
+                extraCard.querySelector('h3').textContent = 'CNN (EXTRA) ANALYSIS';
+                extraValue.textContent = '--%';
+                extraValue.style.fontSize = '3.5rem';
+                extraPrediction.textContent = 'Prediction: N/A';
+            }
+
+            function displayResults(data) {
+                resultsSection.classList.remove('hidden');
+
+                // --- Random Forest Card ---
+                if (data.RF_Error) {
+                    rfCard.className = 'result-card prediction-error';
+                    rfValue.textContent = 'ERROR';
+                    rfValue.style.fontSize = '2rem';
+                    rfPrediction.textContent = data.RF_Error.substring(0, 30) + '...';
+                } else {
+                    const rfProb = (data.RF_Prob * 100).toFixed(0);
+                    rfValue.textContent = `${rfProb}%`;
+                    if (data.RF_Pred === 1) {
+                        rfCard.className = 'result-card prediction-high';
+                        rfPrediction.textContent = 'Prediction: At-Risk';
+                    } else {
+                        rfCard.className = 'result-card prediction-low';
+                        rfPrediction.textContent = 'Prediction: Low-Risk';
+                    }
+                }
+
+                // --- CNN Model 1 Card ---
+                if (data.CNN1_Error) {
+                    cnnCard.className = 'result-card prediction-error';
+                    cnnValue.textContent = 'ERROR';
+                    cnnValue.style.fontSize = '2rem';
+                    cnnPrediction.textContent = data.CNN1_Error.substring(0, 30) + '...';
+                } else {
+                    const cnn1Prob = (data.CNN1_Prob * 100).toFixed(0);
+                    cnnValue.textContent = `${cnn1Prob}%`;
+                    if (data.CNN1_Pred === 1) {
+                        cnnCard.className = 'result-card prediction-high';
+                        cnnPrediction.textContent = 'Prediction: At-Risk';
+                    } else {
+                        cnnCard.className = 'result-card prediction-low';
+                        cnnPrediction.textContent = 'Prediction: Low-Risk';
+                    }
+                }
+                
+                // --- CNN Model 2 (Extra) Card ---
+                if (data.CNN2_Error) {
+                    extraCard.className = 'result-card prediction-error';
+                    extraCard.querySelector('h3').textContent = 'ANALYSIS ERROR';
+                    extraValue.textContent = 'ERROR';
+                    extraValue.style.fontSize = '2rem';
+                    extraPrediction.textContent = data.CNN2_Error.substring(0, 30) + '...';
+                } else {
+                    const cnn2Prob = (data.CNN2_Prob * 100).toFixed(0);
+                    extraValue.textContent = `${cnn2Prob}%`;
+                    if (data.CNN2_Pred === 1) {
+                        extraCard.className = 'result-card prediction-high';
+                        extraPrediction.textContent = 'Prediction: At-Risk';
+                    } else {
+                        extraCard.className = 'result-card prediction-low';
+                        extraPrediction.textContent = 'Prediction: Low-Risk';
+                    }
+                }
+            }
+            
+            /**
+             * Main function to send audio to the backend
+             */
+            async function sendAudioForAnalysis() {
+                if (!audioBlob) {
+                    showStatus('No audio data to analyze.', true);
+                    return;
+                }
+
+                showStatus('Analyzing... Please wait.', false);
+                resetResultCards(); // Clear old results
+
+                const formData = new FormData();
+                // We use 'audio_file' as the key, which your app.py will look for
+                formData.append('audio', audioBlob, 'analysis_audio.wav');
+
+                try {
+                    // This sends the data to your Flask app's /analyze route
+                    // Make sure your app.py has this route
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.error || 'Server returned an error.');
+                    }
+
+                    const data = await response.json();
+                    
+                    // Display the real results
+                    displayResults(data);
+                    showStatus('Analysis complete!', false);
+
+                } catch (error) {
+                    console.error('Analysis failed:', error);
+                    showStatus(error.message, true);
+                    // Display an error on all cards
+                    const errorData = {
+                        RF_Error: "Analysis Failed",
+                        CNN1_Error: "Analysis Failed",
+                        CNN2_Error: "Analysis Failed"
+                    };
+                    displayResults(errorData);
+                }
+            }
+            
+            // --- Recording Logic ---
+            recordButton.addEventListener('click', async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    audioBlob = null; // Clear previous audio
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        audioPlayback.src = audioUrl;
+                        audioPlayback.classList.remove('hidden');
+                        analyzeRecordedButton.classList.remove('hidden');
+                        stream.getTracks().forEach(track => track.stop()); // Stop mic access
+                    };
+                    
+                    mediaRecorder.start();
+                    recordButton.disabled = true;
+                    stopButton.disabled = false;
+                    analyzeRecordedButton.classList.add('hidden');
+                    audioPlayback.classList.add('hidden');
+                    analyzeUploadedButton.disabled = true; // Disable upload button
+                    showStatus('Recording... Click stop when finished.', false);
+                    
+                } catch (err) {
+                    console.error('Error accessing microphone:', err);
+                    showStatus('Could not access microphone. Please allow permission.', true);
+                }
+            });
+
+            stopButton.addEventListener('click', () => {
+                mediaRecorder.stop();
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+                analyzeUploadedButton.disabled = false; // Re-enable upload
+                showStatus('Recording stopped. Ready to analyze.', false);
+            });
+
+            analyzeRecordedButton.addEventListener('click', sendAudioForAnalysis);
+
+            // --- Upload Logic ---
+            audioFileInput.addEventListener('change', () => {
+                const file = audioFileInput.files[0];
+                if (file) {
+                    audioBlob = file; // Store the file blob
+                    fileChosenText.textContent = file.name;
+                    analyzeUploadedButton.disabled = false;
+                    recordButton.disabled = true; // Disable record button
+                    
+                    // Show in player
+                    const audioUrl = URL.createObjectURL(file);
+                    audioPlayback.src = audioUrl;
+                    audioPlayback.classList.remove('hidden');
+                    
+                    showStatus('File selected. Ready to analyze.', false);
+                } else {
+                    audioBlob = null;
+                    fileChosenText.textContent = 'Choose file';
+                    analyzeUploadedButton.disabled = true;
+                    recordButton.disabled = false;
+                }
+            });
+            
+            analyzeUploadedButton.addEventListener('click', sendAudioForAnalysis);
+
+        });
+    </script>
+</body>
+</html>
