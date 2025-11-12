@@ -428,244 +428,211 @@
     <!-- 4. JAVASCRIPT LOGIC -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // --- DOM Element Selection ---
-            const recordButton = document.getElementById('recordButton');
-            const stopButton = document.getElementById('stopButton');
-            const audioPlayback = document.getElementById('audioPlayback');
-            const analyzeRecordedButton = document.getElementById('analyzeRecordedButton');
-            
-            const audioFileInput = document.getElementById('audioFileInput');
-            const fileChosenText = document.getElementById('file-chosen-text');
-            const analyzeUploadedButton = document.getElementById('analyzeUploadedButton');
-            
-            const statusMessage = document.getElementById('statusMessage');
-            const resultsSection = document.getElementById('analysis-results');
-            
-            // Result Cards
-            const rfCard = document.getElementById('rf-card');
-            const rfValue = document.getElementById('rf-value');
-            const rfPrediction = document.getElementById('rf-prediction');
-            
-            const cnnCard = document.getElementById('cnn-card');
-            const cnnValue = document.getElementById('cnn-value');
-            const cnnPrediction = document.getElementById('cnn-prediction');
-            
-            const extraCard = document.getElementById('extra-card');
-            const extraValue = document.getElementById('extra-value');
-            const extraPrediction = document.getElementById('extra-prediction');
+    // --- DOM Element Selection ---
+    const recordButton = document.getElementById('recordButton');
+    const stopButton = document.getElementById('stopButton');
+    const audioPlayback = document.getElementById('audioPlayback');
+    const analyzeRecordedButton = document.getElementById('analyzeRecordedButton');
 
-            // --- State Variables ---
-            let mediaRecorder;
-            let audioChunks = [];
-            let audioBlob = null; // Will hold the audio data (from record or upload)
+    const audioFileInput = document.getElementById('audioFileInput');
+    const fileChosenText = document.getElementById('file-chosen-text');
+    const analyzeUploadedButton = document.getElementById('analyzeUploadedButton');
 
-            // --- Helper Functions ---
+    const statusMessage = document.getElementById('statusMessage');
+    const resultsSection = document.getElementById('analysis-results');
+
+    // Result Cards
+    const rfCard = document.getElementById('rf-card');
+    const rfValue = document.getElementById('rf-value');
+    const rfPrediction = document.getElementById('rf-prediction');
+
+    const cnnCard = document.getElementById('cnn-card');
+    const cnnValue = document.getElementById('cnn-value');
+    const cnnPrediction = document.getElementById('cnn-prediction');
+
+    const extraCard = document.getElementById('extra-card');
+    const extraValue = document.getElementById('extra-value');
+    const extraPrediction = document.getElementById('extra-prediction');
+
+    // --- State Variables ---
+    let mediaRecorder;
+    let audioChunks = [];
+    let audioBlob = null;
+
+    // --- Helper Functions ---
+    function showStatus(message, isError = false) {
+        statusMessage.textContent = message;
+        statusMessage.className = isError 
+            ? 'text-center mt-6 text-lg text-red-400' 
+            : 'text-center mt-6 text-lg text-sky-300';
+    }
+
+    function resetResultCards() {
+        resultsSection.classList.add('hidden');
+        [rfCard, cnnCard, extraCard].forEach(card => card.className = 'result-card');
+
+        rfValue.textContent = cnnValue.textContent = extraValue.textContent = '--%';
+        rfPrediction.textContent = cnnPrediction.textContent = extraPrediction.textContent = 'Prediction: N/A';
+    }
+
+    function displayResults(data) {
+        resultsSection.classList.remove('hidden');
+
+        // --- Random Forest ---
+        if (data.RF_Error) {
+            rfCard.className = 'result-card prediction-error';
+            rfValue.textContent = 'ERROR';
+            rfPrediction.textContent = data.RF_Error;
+        } else {
+            const rfProb = (data.RF_Prob * 100).toFixed(0);
+            rfValue.textContent = `${rfProb}%`;
+            rfCard.className = data.RF_Pred === 1 
+                ? 'result-card prediction-high' 
+                : 'result-card prediction-low';
+            rfPrediction.textContent = data.RF_Pred === 1 
+                ? 'Prediction: At-Risk' 
+                : 'Prediction: Low-Risk';
+        }
+
+        // --- CNN Model 1 ---
+        if (data.CNN1_Error) {
+            cnnCard.className = 'result-card prediction-error';
+            cnnValue.textContent = 'ERROR';
+            cnnPrediction.textContent = data.CNN1_Error;
+        } else {
+            const cnn1Prob = (data.CNN1_Prob * 100).toFixed(0);
+            cnnValue.textContent = `${cnn1Prob}%`;
+            cnnCard.className = data.CNN1_Pred === 1 
+                ? 'result-card prediction-high' 
+                : 'result-card prediction-low';
+            cnnPrediction.textContent = data.CNN1_Pred === 1 
+                ? 'Prediction: At-Risk' 
+                : 'Prediction: Low-Risk';
+        }
+
+        // --- CNN Model 2 (Extra) ---
+        if (data.CNN2_Error) {
+            extraCard.className = 'result-card prediction-error';
+            extraValue.textContent = 'ERROR';
+            extraPrediction.textContent = data.CNN2_Error;
+        } else {
+            const cnn2Prob = (data.CNN2_Prob * 100).toFixed(0);
+            extraValue.textContent = `${cnn2Prob}%`;
+            extraCard.className = data.CNN2_Pred === 1 
+                ? 'result-card prediction-high' 
+                : 'result-card prediction-low';
+            extraPrediction.textContent = data.CNN2_Pred === 1 
+                ? 'Prediction: At-Risk' 
+                : 'Prediction: Low-Risk';
+        }
+    }
+
+    // --- Safe Fetch Wrapper ---
+    async function sendAudioForAnalysis() {
+        if (!audioBlob) {
+            showStatus('No audio data to analyze.', true);
+            return;
+        }
+
+        showStatus('Analyzing... Please wait.');
+        resetResultCards();
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'analysis_audio.wav');
+
+        try {
+            const response = await fetch('/predict', { method: 'POST', body: formData });
             
-            function showStatus(message, isError = false) {
-                statusMessage.textContent = message;
-                statusMessage.className = isError 
-                    ? 'text-center mt-6 text-lg text-red-400' 
-                    : 'text-center mt-6 text-lg text-sky-300';
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                throw new Error('Invalid JSON received from server');
             }
-            
-            function resetResultCards() {
-                resultsSection.classList.add('hidden');
-                
-                [rfCard, cnnCard, extraCard].forEach(card => {
-                    card.className = 'result-card'; // Reset border
-                });
-                
-                rfValue.textContent = '--%';
-                rfPrediction.textContent = 'Prediction: N/A';
-                
-                cnnValue.textContent = '--%';
-                cnnPrediction.textContent = 'Prediction: N/A';
-                
-                extraCard.querySelector('h3').textContent = 'CNN (EXTRA) ANALYSIS';
-                extraValue.textContent = '--%';
-                extraValue.style.fontSize = '3.5rem';
-                extraPrediction.textContent = 'Prediction: N/A';
+
+            if (!response.ok) {
+                throw new Error(data?.error || 'Server error occurred');
             }
 
-            function displayResults(data) {
-                resultsSection.classList.remove('hidden');
+            displayResults(data);
+            showStatus('Analysis complete!');
+        } catch (error) {
+            console.error('❌ Analysis failed:', error);
+            showStatus(error.message, true);
 
-                // --- Random Forest Card ---
-                if (data.RF_Error) {
-                    rfCard.className = 'result-card prediction-error';
-                    rfValue.textContent = 'ERROR';
-                    rfValue.style.fontSize = '2rem';
-                    rfPrediction.textContent = data.RF_Error.substring(0, 30) + '...';
-                } else {
-                    const rfProb = (data.RF_Prob * 100).toFixed(0);
-                    rfValue.textContent = `${rfProb}%`;
-                    if (data.RF_Pred === 1) {
-                        rfCard.className = 'result-card prediction-high';
-                        rfPrediction.textContent = 'Prediction: At-Risk';
-                    } else {
-                        rfCard.className = 'result-card prediction-low';
-                        rfPrediction.textContent = 'Prediction: Low-Risk';
-                    }
-                }
+            const errorData = {
+                RF_Error: "Analysis Failed",
+                CNN1_Error: "Analysis Failed",
+                CNN2_Error: "Analysis Failed"
+            };
+            displayResults(errorData);
+        }
+    }
 
-                // --- CNN Model 1 Card ---
-                if (data.CNN1_Error) {
-                    cnnCard.className = 'result-card prediction-error';
-                    cnnValue.textContent = 'ERROR';
-                    cnnValue.style.fontSize = '2rem';
-                    cnnPrediction.textContent = data.CNN1_Error.substring(0, 30) + '...';
-                } else {
-                    const cnn1Prob = (data.CNN1_Prob * 100).toFixed(0);
-                    cnnValue.textContent = `${cnn1Prob}%`;
-                    if (data.CNN1_Pred === 1) {
-                        cnnCard.className = 'result-card prediction-high';
-                        cnnPrediction.textContent = 'Prediction: At-Risk';
-                    } else {
-                        cnnCard.className = 'result-card prediction-low';
-                        cnnPrediction.textContent = 'Prediction: Low-Risk';
-                    }
-                }
-                
-                // --- CNN Model 2 (Extra) Card ---
-                if (data.CNN2_Error) {
-                    extraCard.className = 'result-card prediction-error';
-                    extraCard.querySelector('h3').textContent = 'ANALYSIS ERROR';
-                    extraValue.textContent = 'ERROR';
-                    extraValue.style.fontSize = '2rem';
-                    extraPrediction.textContent = data.CNN2_Error.substring(0, 30) + '...';
-                } else {
-                    const cnn2Prob = (data.CNN2_Prob * 100).toFixed(0);
-                    extraValue.textContent = `${cnn2Prob}%`;
-                    if (data.CNN2_Pred === 1) {
-                        extraCard.className = 'result-card prediction-high';
-                        extraPrediction.textContent = 'Prediction: At-Risk';
-                    } else {
-                        extraCard.className = 'result-card prediction-low';
-                        extraPrediction.textContent = 'Prediction: Low-Risk';
-                    }
-                }
-            }
-            
-            /**
-             * Main function to send audio to the backend
-             */
-            async function sendAudioForAnalysis() {
-                if (!audioBlob) {
-                    showStatus('No audio data to analyze.', true);
-                    return;
-                }
+    // --- Recording Logic ---
+    recordButton.addEventListener('click', async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            audioBlob = null;
 
-                showStatus('Analyzing... Please wait.', false);
-                resetResultCards(); // Clear old results
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                audioPlayback.src = audioUrl;
+                audioPlayback.classList.remove('hidden');
+                analyzeRecordedButton.classList.remove('hidden');
+                stream.getTracks().forEach(track => track.stop());
+            };
 
-                const formData = new FormData();
-                // We use 'audio_file' as the key, which your app.py will look for
-                formData.append('audio', audioBlob, 'analysis_audio.wav');
+            mediaRecorder.start();
+            recordButton.disabled = true;
+            stopButton.disabled = false;
+            analyzeRecordedButton.classList.add('hidden');
+            analyzeUploadedButton.disabled = true;
+            showStatus('Recording... Click stop when finished.');
+        } catch (err) {
+            console.error('Microphone access error:', err);
+            showStatus('Could not access microphone. Please allow permission.', true);
+        }
+    });
 
-                try {
-                    // This sends the data to your Flask app's /analyze route
-                    // Make sure your app.py has this route
-                    const response = await fetch('/predict', {
-                        method: 'POST',
-                        body: formData
-                    });
+    stopButton.addEventListener('click', () => {
+        mediaRecorder.stop();
+        recordButton.disabled = false;
+        stopButton.disabled = true;
+        analyzeUploadedButton.disabled = false;
+        showStatus('Recording stopped. Ready to analyze.');
+    });
 
-                    if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.error || 'Server returned an error.');
-                    }
+    analyzeRecordedButton.addEventListener('click', sendAudioForAnalysis);
 
-                    const data = await response.json();
-                    
-                    // Display the real results
-                    displayResults(data);
-                    showStatus('Analysis complete!', false);
+    // --- Upload Logic ---
+    audioFileInput.addEventListener('change', () => {
+        const file = audioFileInput.files[0];
+        if (file) {
+            audioBlob = file;
+            fileChosenText.textContent = file.name;
+            analyzeUploadedButton.disabled = false;
+            recordButton.disabled = true;
 
-                } catch (error) {
-                    console.error('Analysis failed:', error);
-                    showStatus(error.message, true);
-                    // Display an error on all cards
-                    const errorData = {
-                        RF_Error: "Analysis Failed",
-                        CNN1_Error: "Analysis Failed",
-                        CNN2_Error: "Analysis Failed"
-                    };
-                    displayResults(errorData);
-                }
-            }
-            
-            // --- Recording Logic ---
-            recordButton.addEventListener('click', async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-                    audioBlob = null; // Clear previous audio
-                    
-                    mediaRecorder.ondataavailable = event => {
-                        audioChunks.push(event.data);
-                    };
-                    
-                    mediaRecorder.onstop = () => {
-                        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                        const audioUrl = URL.createObjectURL(audioBlob);
-                        audioPlayback.src = audioUrl;
-                        audioPlayback.classList.remove('hidden');
-                        analyzeRecordedButton.classList.remove('hidden');
-                        stream.getTracks().forEach(track => track.stop()); // Stop mic access
-                    };
-                    
-                    mediaRecorder.start();
-                    recordButton.disabled = true;
-                    stopButton.disabled = false;
-                    analyzeRecordedButton.classList.add('hidden');
-                    audioPlayback.classList.add('hidden');
-                    analyzeUploadedButton.disabled = true; // Disable upload button
-                    showStatus('Recording... Click stop when finished.', false);
-                    
-                } catch (err) {
-                    console.error('Error accessing microphone:', err);
-                    showStatus('Could not access microphone. Please allow permission.', true);
-                }
-            });
+            const audioUrl = URL.createObjectURL(file);
+            audioPlayback.src = audioUrl;
+            audioPlayback.classList.remove('hidden');
+            showStatus('File selected. Ready to analyze.');
+        } else {
+            audioBlob = null;
+            fileChosenText.textContent = 'Choose file';
+            analyzeUploadedButton.disabled = true;
+            recordButton.disabled = false;
+        }
+    });
 
-            stopButton.addEventListener('click', () => {
-                mediaRecorder.stop();
-                recordButton.disabled = false;
-                stopButton.disabled = true;
-                analyzeUploadedButton.disabled = false; // Re-enable upload
-                showStatus('Recording stopped. Ready to analyze.', false);
-            });
+    analyzeUploadedButton.addEventListener('click', sendAudioForAnalysis);
+});
 
-            analyzeRecordedButton.addEventListener('click', sendAudioForAnalysis);
-
-            // --- Upload Logic ---
-            audioFileInput.addEventListener('change', () => {
-                const file = audioFileInput.files[0];
-                if (file) {
-                    audioBlob = file; // Store the file blob
-                    fileChosenText.textContent = file.name;
-                    analyzeUploadedButton.disabled = false;
-                    recordButton.disabled = true; // Disable record button
-                    
-                    // Show in player
-                    const audioUrl = URL.createObjectURL(file);
-                    audioPlayback.src = audioUrl;
-                    audioPlayback.classList.remove('hidden');
-                    
-                    showStatus('File selected. Ready to analyze.', false);
-                } else {
-                    audioBlob = null;
-                    fileChosenText.textContent = 'Choose file';
-                    analyzeUploadedButton.disabled = true;
-                    recordButton.disabled = false;
-                }
-            });
-            
-            analyzeUploadedButton.addEventListener('click', sendAudioForAnalysis);
-
-        });
     </script>
 </body>
 </html>
